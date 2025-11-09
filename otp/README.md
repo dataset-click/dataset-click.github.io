@@ -62,13 +62,11 @@ The HTTP request can be accessed directly or sent from many scripting languages.
 
 | File | Description | Link |
 |------|-------------|------|
-| `index.html` | Landing page for both apps | [link](https://kiki-maulana.github.io/otp/)|
-| `otp-test.html` | Single trip test tool | [link](https://kiki-maulana.github.io/otp/otp-test.html)|
-| `otp-bulk.html` | Batch trip summary tool |[link](https://kiki-maulana.github.io/otp/otp-bulk.html)|
-| `otp_bulk_sample.csv` | Sample CSV input for batch testing |[link](https://kiki-maulana.github.io/otp/otp_bulk_sample.csv)|
+| `index.html` | Landing page for both apps | [link](https://dataset-click.github.io/otp/)|
+| `otp-test.html` | Single trip test tool | [link](https://dataset-click.github.io/otp/otp-test.html)|
+| `otp-bulk.html` | Batch trip summary tool |[link](https://dataset-click.github.io/otp/otp-bulk.html)|
+| `otp_bulk_sample.csv` | Sample CSV input for batch testing |[link](https://dataset-click.github.io/otp/otp_bulk_sample.csv)|
 | `README.md` | This file |-|
-
-For the ptplanner configuration and dataset required for the service can be downloaded from [here](https://github.com/kiki-maulana/ptplanner.git)
 
 ## ✅ Requirements
 
@@ -80,8 +78,7 @@ No backend server is required to run the interface — it’s fully client-side.
 
 ## 📢 Attribution & Credits
 
-This tool was built and maintained by **Kiki Adhinugraha**  
-Contact: [k.adhinugraha@latrobe.edu.au](mailto:k.adhinugraha@latrobe.edu.au)
+This tool was built and maintained by **removed for review**
 
 ### 📚 Attributions
 
@@ -95,11 +92,11 @@ Contact: [k.adhinugraha@latrobe.edu.au](mailto:k.adhinugraha@latrobe.edu.au)
 ## 🐞 Report Issues
 
 If you encounter bugs or data issues, please contact:  
-📧 [k.adhinugraha@latrobe.edu.au](mailto:k.adhinugraha@latrobe.edu.au)
+📧**removed for review process**
 
 ---
   This journey planner is powered by <a href="https://github.com/opentripplanner/OpenTripPlanner" target="_blank">OpenTripPlanner</a>,
   an open-source multimodal trip planning engine. Licensed under the
   <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank">Apache 2.0 License</a>.
-MIT License © 2025 Kiki Adhinugraha
+MIT License © 2025 
 Last update: September 2025
