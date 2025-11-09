@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OTP Trip Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    #map { height: 300px; margin-top: 20px; }
+    body { font-family: Arial; max-width: 800px; margin: auto; padding: 20px; }
+    input, select, button { margin: 5px 0; width: 100%; padding: 8px; }
+    pre { background: #eee; padding: 10px; overflow: auto; max-height: 300px; }
+  </style>
+</head>
+<body>
+  <h2>OpenTripPlanner - Simple JS App</h2>
+
+  <label for="state">Select Metropolitan Area</label>
+  <select id="state">
+    <option value="vic">Melbourne</option>
+    <option value="nsw">Sydney</option>
+    <option value="qld">Brisbane</option>
+    <option value="wa">Perth</option>
+    <option value="sa">Adelaide</option>
+    <option value="nt">Darwin</option>
+    <option value="tas">Hobart</option>
+    <option value="act">Canberra</option>
+  </select>
+
+  <label>Journey Date</label>
+  <input type="date" id="date" value="2025-04-24">
+
+  <label>Journey Time</label>
+  <input type="time" id="time" value="08:00">
+
+  <label>Origin Latitude</label>
+  <input type="text" id="origLat" placeholder="e.g. -37.8136" value="-37.8103528">
+
+  <label>Origin Longitude</label>
+  <input type="text" id="origLon" placeholder="e.g. 144.9631" value="144.9633012">
+
+  <label>Destination Latitude</label>
+  <input type="text" id="destLat" placeholder="e.g. -37.8184" value="-37.7208129">
+
+  <label>Destination Longitude</label>
+  <input type="text" id="destLon" placeholder="e.g. 144.9671" value="145.0473987">
+
+  <button onclick="planTrip()">Plan Trip</button>
+
+  <div id="map"></div>
+
+  <h3>Trip Summary</h3>
+  <div id="summary"></div>
+
+  <h3>Raw JSON Response</h3>
+  <pre id="jsonOutput"></pre>
+
+  <script>
+    let map;
+    function planTrip() {
+      const state = document.getElementById('state').value;
+      const date = document.getElementById('date').value;
+      const time = document.getElementById('time').value;
+      const fromPlace = `${document.getElementById('origLat').value},${document.getElementById('origLon').value}`;
+      const toPlace = `${document.getElementById('destLat').value},${document.getElementById('destLon').value}`;
+
+      const url = `https://ptplanner.latrobe.edu.au/otp/routers/${state}/plan` +
+        `?fromPlace=${fromPlace}&toPlace=${toPlace}&time=${time}&date=${date}` +
+        `&mode=TRANSIT,WALK&numItineraries=1`;
+
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('jsonOutput').textContent = JSON.stringify(data, null, 2);
+
+          const itin = data.plan.itineraries[0];
+          const tripLengthKm = itin.legs
+            .map(leg => leg.distance || 0)
+            .reduce((a, b) => a + b, 0) / 1000;
+          const tripLengthKmFormatted = tripLengthKm.toFixed(2);
+          const tripTimeMin = Math.round(itin.duration / 60);
+          const walkDistanceKm = (itin.walkDistance / 1000).toFixed(2);
+
+          const transfers = itin.transfers;
+          const routes = itin.legs
+            .filter(leg => leg.mode !== 'WALK')
+            .map(leg => `${leg.mode} (${leg.route})`).join(', ');
+
+          const waitTimeMin = itin.legs
+            .map(leg => leg.waitingTime || 0)
+            .reduce((a, b) => a + b, 0) / 60;
+
+          document.getElementById('summary').innerHTML = `
+            <strong>Trip Distance:</strong> ${tripLengthKmFormatted} km<br>
+            <strong>Trip Duration:</strong> ${tripTimeMin} minutes<br>
+            <strong>Number of Transfers:</strong> ${transfers}<br>
+            <strong>Public Transport Routes:</strong> ${routes}<br>
+            <strong>Walking Distance:</strong> ${walkDistanceKm} km<br>
+            <strong>Total Waiting Time:</strong> ${waitTimeMin.toFixed(1)} minutes
+          `;
+
+          // Draw map
+          if (!map) {
+            map = L.map('map').setView([document.getElementById('origLat').value, document.getElementById('origLon').value], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+          }
+          map.eachLayer(layer => {
+            if (layer instanceof L.Polyline || layer instanceof L.Marker) map.removeLayer(layer);
+          });
+
+          // Plot legs
+          itin.legs.forEach(leg => {
+            const coords = leg.legGeometry.points;
+            const decoded = decodePolyline(coords);
+            const latlngs = decoded.map(pt => [pt.lat, pt.lng]);
+            L.polyline(latlngs, { color: leg.mode === 'WALK' ? 'gray' : 'blue' }).addTo(map);
+          });
+
+          const from = fromPlace.split(',').map(Number);
+          const to = toPlace.split(',').map(Number);
+          L.marker(from).addTo(map).bindPopup("Origin").openPopup();
+          L.marker(to).addTo(map).bindPopup("Destination");
+        });
+    }
+
+    // Decode polyline from OTP format (Google's polyline algorithm)
+    function decodePolyline(encoded) {
+      let index = 0, lat = 0, lng = 0, coordinates = [];
+      while (index < encoded.length) {
+        let b, shift = 0, result = 0;
+        do {
+          b = encoded.charCodeAt(index++) - 63;
+          result |= (b & 0x1f) << shift;
+          shift += 5;
+        } while (b >= 0x20);
+        const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+        lat += dlat;
+
+        shift = 0;
+        result = 0;
+        do {
+          b = encoded.charCodeAt(index++) - 63;
+          result |= (b & 0x1f) << shift;
+          shift += 5;
+        } while (b >= 0x20);
+        const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+        lng += dlng;
+
+        coordinates.push({ lat: lat / 1e5, lng: lng / 1e5 });
+      }
+      return coordinates;
+    }
+
+    function downloadJSON() {
+        const jsonText = document.getElementById('jsonOutput').textContent;
+        const blob = new Blob([jsonText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'otp_trip_result.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+  </script>
+  <button onclick="downloadJSON()">Download JSON</button>
+  <div>
+    The trip planner uses <a href="https://www.opentripplanner.org/" target="_blank">OpenTripPlanner</a> engine.<br>
+    The OTP engine can be accessed at <a href="https://ptplanner.latrobe.edu.au" target="_blank">https://ptplanner.latrobe.edu.au</a>
+    <br><br>
+    To get the JSON result, you can send http request using the following format:
+    <br>
+    https://ptplanner.latrobe.edu.au/otp/routers/<strong>{STATE_CODE}</strong>/plan?fromPlace=<strong>{lat,lon}</strong>&toPlace=<strong>{lat,lon}</strong>&date=<strong>{YYYY-MM-DD}</strong>&time=<strong>{HH24:MI}</strong>&mode=TRANSIT,WALK
+    <br><br>
+  </div>
+  <div>
+    The following table contains examples of trips in all states. The trips are conducted on 17 September 2025 at 8 AM.
+    The XML result is called using HTTP request
+    <table border="1" cellpadding="5" cellspacing="0">
+      <tr>
+        <th>City</th>
+        <th>From - To</th>
+        <th>XML result</th>
+        <th>MAP</th>
+      </tr>
+      <tr>
+        <td>Melbourne</td>
+        <td>Flinder station - La Trobe University</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/vic/plan?route=vic&fromPlace=-37.8183,144.9671&toPlace=-37.7215,145.0470&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=vic&fromPlace=-37.8183,144.9671&toPlace=-37.7215,145.0470&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      <tr>
+        <td>Sydney</td>
+        <td>Central station - Western Sydney University, Parramatta</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/nsw/plan?fromPlace=-33.8830,151.2070&toPlace=-33.81180689163798, 151.0251539530426&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=nsw&fromPlace=-33.8830,151.2070&toPlace=-33.81180689163798, 151.0251539530426&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      <tr>
+        <td>Brisbane</td>
+        <td>Roma Street Station - Griffith University</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/qld/plan?fromPlace=-27.4661,153.0168&toPlace=-27.5502,153.0622&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=qld&fromPlace=-27.4661,153.0168&toPlace=-27.5502,153.0622&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      <tr>
+        <td>Perth</td>
+        <td>Perth Station - Curtin University</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/wa/plan?fromPlace=-31.9505,115.8605&toPlace=-32.0038,115.8944&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=wa&fromPlace=-31.9505,115.8605&toPlace=-32.0038,115.8944&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      <tr>
+        <td>Adelaide</td>
+        <td>Adelaide Station - Flinders University</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/sa/plan?fromPlace=-34.9187,138.5955&toPlace=-35.0184,138.5671&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=sa&fromPlace=-34.9187,138.5955&toPlace=-35.0184,138.5671&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      <tr>
+        <td>Darwin</td>
+        <td>Darwin Bus Interchange - Charles Darwin University</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/nt/plan?fromPlace=-12.4613,130.8419&toPlace=-12.3706,130.8691&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=nt&fromPlace=-12.4613,130.8419&toPlace=-12.3706,130.8691&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      <tr>
+        <td>Hobart</td>
+        <td>Hobart City Interchange - University of Tasmania</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/tas/plan?fromPlace=-42.8810,147.3270&toPlace=-42.90498680035457,147.3249274459551&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=tas&fromPlace=-42.8810,147.3270&toPlace=-42.90498680035457,147.3249274459551&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      <tr>
+        <td>Canberra</td>
+        <td>City Interchange - University of Canberra</td>
+        <td><a href="https://ptplanner.latrobe.edu.au/otp/routers/act/plan?fromPlace=-35.2784,149.1291&toPlace=-35.2371,149.0845&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+        <td><a href="map_viewer2.html?route=act&fromPlace=-35.2784,149.1291&toPlace=-35.2371,149.0845&mode=TRANSIT,WALK&date=2025-09-17&time=08:00am" target="_blank">link</a></td>
+      </tr>
+      </table>      
+  </div>
+  <br>
+  <div>
+<p style="margin-top:40px; font-size: 0.9em; color: #888;">
+  Built by <strong>Kiki Adhinugraha</strong> using OpenTripPlanner. UI enhancements assisted by ChatGPT.
+  <br> Please report issues to k.adhinugraha@latrobe.edu.au
+</p>
+</div>
+</body>
+</html>
