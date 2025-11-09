@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OpenTripPlanner Tools</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: auto;
+      padding: 40px 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 0.5em;
+    }
+    .app-card {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .app-card h2 {
+      margin-top: 0;
+    }
+    .app-card a {
+      display: inline-block;
+      margin-top: 10px;
+      color: white;
+      background-color: #007bff;
+      padding: 10px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+    }
+    .app-card a:hover {
+      background-color: #0056b3;
+    }
+    footer {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: 40px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>OpenTripPlanner (OTP) Tools</h1>
+  <p>Welcome! This page provides tools for trip planning and analysis using OpenTripPlanner.</p>
+
+  <div class="app-card">
+    <h2>🔍 Single Trip Planner</h2>
+    <p>Manually enter origin and destination coordinates, date/time, and transport options to test individual routes using OTP.</p>
+    <a href="otp-test.html" target="_blank">Launch Single Trip Planner</a>
+  </div>
+
+  <div class="app-card">
+    <h2>📊 Batch Trip Summary</h2>
+    <p>Upload a CSV file (e.g., <code>otp_bulk_sample.csv</code>) containing multiple trips to retrieve summary statistics for each using OTP.</p>
+    <a href="otp-bulk.html" target="_blank">Launch Batch Trip Tool</a>
+    <a href="otp_bulk_sample.csv">Download sample CSV</a>
+  </div>
+
+    <div class="app-card">
+    <h2>OTP Engine</h2>
+    <p>Explore interactive OTP engine </p>
+    <p>The OTP engine uses GTFS data from GTFS providers for all Australian metropolitan</p>
+    <p>The GTFS data are valid for journey on January 2025 - June 2026</p>
+    <a href="https://ptplanner.latrobe.edu.au" target="_blank">Explore OTP engine in Melbourne</a>
+    <a href="https://github.com/kiki-maulana/ptplanner.git" target="_blank">PTPlanner on Github</a>
+  </div>
+
+  <footer>
+    Built by <strong>Kiki Adhinugraha</strong> using OpenTripPlanner.<br>
+    UI enhancements assisted by ChatGPT.<br>
+    Report issues to: <a href="mailto:k.adhinugraha@latrobe.edu.au">k.adhinugraha@latrobe.edu.au</a>
+  </footer>
+
+</body>
+</html>
