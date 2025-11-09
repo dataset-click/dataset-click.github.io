@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OTP Batch Trip Summary</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: Arial; max-width: 1000px; margin: auto; padding: 20px; }
+    table, th, td { border: 1px solid #ccc; border-collapse: collapse; padding: 6px; }
+    table { width: 100%; margin-top: 20px; }
+    button { padding: 10px 15px; margin-top: 10px; }
+    input[type="file"] { margin-top: 10px; }
+    .section-title { margin-top: 30px; font-size: 18px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>OTP Batch Trip Summary</h2>
+
+  <input type="file" id="csvInput" accept=".csv">
+  <button onclick="downloadCSV()">Download Result CSV</button>
+
+  <div class="section-title">Loaded CSV Data</div>
+  <table id="csvPreview">
+    <thead></thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="section-title">OTP Trip Results</div>
+  <table id="resultTable">
+    <thead>
+      <tr>
+        <th>Trip #</th>
+        <th>State</th>
+        <th>Distance (km)</th>
+        <th>Duration (min)</th>
+        <th>Transfers</th>
+        <th>Modes</th>
+        <th>Walking (km)</th>
+        <th>Waiting (min)</th>
+        <th>Status</th>
+        <th>OTP Link</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let tripResults = [];
+
+    document.getElementById('csvInput').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: '|',
+        complete: function (results) {
+          tripResults = [];
+          document.querySelector('#resultTable tbody').innerHTML = '';
+          document.querySelector('#csvPreview thead').innerHTML = '';
+          document.querySelector('#csvPreview tbody').innerHTML = '';
+
+          const cleanedData = results.data.map(cleanRow);
+          showCSVPreview(cleanedData);
+          cleanedData.forEach((row, index) => processTrip(row, index));
+        }
+      });
+    });
+
+    function cleanRow(row) {
+      const cleaned = {};
+      Object.keys(row).forEach(key => {
+        const cleanKey = key.trim();
+        const cleanValue = typeof row[key] === 'string' ? row[key].trim() : row[key];
+        cleaned[cleanKey] = cleanValue;
+      });
+      return cleaned;
+    }
+
+    function showCSVPreview(data) {
+      if (!data || data.length === 0) return;
+
+      const thead = document.querySelector('#csvPreview thead');
+      const tbody = document.querySelector('#csvPreview tbody');
+      const headers = Object.keys(data[0]);
+
+      // Header
+      const headerRow = document.createElement('tr');
+      headers.forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+
+      // Rows
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        headers.forEach(h => {
+          const td = document.createElement('td');
+          td.textContent = row[h];
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    function processTrip(row, index) {
+      const trip_number = row.trip_number || row.trip_num || `#${index + 1}`;
+      const state = row.trip_state;
+      const origin = row.origin;
+      const destination = row.destination;
+      const date = row.trip_date;
+      const time = row.trip_time;
+
+      console.log(`Processing row ${trip_number}`, row);
+
+      if (!origin || !destination || !state || !date || !time) {
+        console.warn(`Incomplete data in row ${trip_number}`);
+        addResultRow({ trip_number, state, distance: '', duration: '', transfers: '', modes: '', walking: '', waiting: '', status: 'failed', link: '-' });
+        return;
+      }
+
+        function reverseCoord(coordStr) {
+        const [lon, lat] = coordStr.replace(/[()]/g, '').split(',');
+        return `${lat.trim()},${lon.trim()}`; // ← lat,lon
+        }
+
+        const from = reverseCoord(origin);
+        const to = reverseCoord(destination);
+
+      const url = `https://ptplanner.latrobe.edu.au/otp/routers/${state}/plan` +
+                  `?fromPlace=${from}&toPlace=${to}&date=${date}&time=${time}` +
+                  `&mode=TRANSIT,WALK&numItineraries=1`;
+
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          const itin = data.plan?.itineraries?.[0];
+          if (!itin) throw new Error('No itinerary');
+
+          const distance = itin.legs.map(l => l.distance || 0).reduce((a, b) => a + b, 0) / 1000;
+          const duration = Math.round(itin.duration / 60);
+          const transfers = itin.transfers;
+          const modes = itin.legs.filter(l => l.mode !== 'WALK')
+                                  .map(l => `${l.mode} (${l.route})`).join(', ');
+          const walking = (itin.walkDistance / 1000).toFixed(2);
+          const waiting = (itin.legs.map(l => l.waitingTime || 0).reduce((a, b) => a + b, 0) / 60).toFixed(1);
+
+          addResultRow({ trip_number, state, distance, duration, transfers, modes, walking, waiting, status: 'success', link: url });
+        })
+        .catch(err => {
+          console.warn(`❌ Failed trip ${trip_number}:`, err.message);
+          addResultRow({ trip_number, state, distance: '', duration: '', transfers: '', modes: '', walking: '', waiting: '', status: 'failed', link: url });
+        });
+    }
+
+    function addResultRow(row) {
+      tripResults.push(row);
+      const tr = document.createElement('tr');
+
+      Object.entries(row).forEach(([key, val]) => {
+        const td = document.createElement('td');
+        if (key === 'link') {
+          if (val && val.startsWith('http')) {
+            const a = document.createElement('a');
+            a.href = val;
+            a.target = '_blank';
+            a.textContent = 'Open';
+            td.appendChild(a);
+          } else {
+            td.textContent = '-';
+          }
+        } else {
+          td.textContent = val;
+        }
+        tr.appendChild(td);
+      });
+
+      document.querySelector('#resultTable tbody').appendChild(tr);
+    }
+
+    function downloadCSV() {
+      if (tripResults.length === 0) return alert("No results to download.");
+      const csv = Papa.unparse(tripResults);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "otp_trip_summary.csv");
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+  <div>
+    <br>
+    OTP batch trip processor. Based on OpenTripPlanner.
+    <br>
+    <br>
+    The sample of CSV file can be downloaded in the github repository.
+    <br>The CSV file uses pipeline '|' as the column delimiter.
+    <br>The following header of CSV file is needed
+    <br>
+    <strong>trip_num|trip_state|origin |destination |trip_date |trip_time</strong>
+    <br>
+    <br>
+    trip_state can be vic, nsw, or qld
+    <br>
+    <br>
+    origin and destination format is (longitude,latitude)
+    <br>
+    <br>
+<p style="margin-top:40px; font-size: 0.9em; color: #888;">
+  Built by <strong>Kiki Adhinugraha</strong> using OpenTripPlanner. UI enhancements assisted by ChatGPT.
+  <br> Please report issues to k.adhinugraha@latrobe.edu.au
+</p>
+  </div>
+</body>
+</html>
