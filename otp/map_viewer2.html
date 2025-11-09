@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OTP Route Viewer</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Read parameters from URL
+    const params = new URLSearchParams(window.location.search);
+    const route = params.get("route") || "vic";
+    const fromPlace = params.get("fromPlace");
+    const toPlace = params.get("toPlace");
+    const mode = params.get("mode") || "TRANSIT,WALK";
+    const date = params.get("date");
+    const time = params.get("time");
+
+    const otpUrl = `https://ptplanner.latrobe.edu.au/otp/routers/${route}/plan?fromPlace=${fromPlace}&toPlace=${toPlace}&mode=${mode}&date=${date}&time=${time}`;
+
+    // Setup map
+    const map = L.map('map').setView([-37.81, 144.96], 12); // Melbourne default
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    // Markers
+    const [fromLat, fromLng] = fromPlace.split(',').map(Number);
+    const [toLat, toLng] = toPlace.split(',').map(Number);
+
+    const fromMarker = L.marker([fromLat, fromLng]).addTo(map).bindPopup("Origin").openPopup();
+    const toMarker = L.marker([toLat, toLng]).addTo(map).bindPopup("Destination");
+
+    // Draw route
+    fetch(otpUrl)
+      .then(res => res.json())
+      .then(data => {
+        const legs = data.plan.itineraries[0].legs;
+        let allCoords = [];
+
+        legs.forEach(leg => {
+        const decoded = decodePolyline(leg.legGeometry.points);
+        allCoords.push(...decoded);
+        L.polyline(decoded, { color: 'blue' }).addTo(map);
+        });
+
+        // Fit the map to the whole route
+        const bounds = L.latLngBounds(allCoords);
+        map.fitBounds(bounds, {
+        padding: [100, 100],
+        maxZoom: 12
+        });     })
+      .catch(err => {
+        console.error("Route fetch error:", err);
+        alert("Failed to load route.");
+      });
+
+    // Polyline decoder (Google-style)
+    function decodePolyline(encoded) {
+      let points = [];
+      let index = 0, lat = 0, lng = 0;
+
+      while (index < encoded.length) {
+        let b, shift = 0, result = 0;
+        do {
+          b = encoded.charCodeAt(index++) - 63;
+          result |= (b & 0x1f) << shift;
+          shift += 5;
+        } while (b >= 0x20);
+        const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+        lat += dlat;
+
+        shift = 0;
+        result = 0;
+        do {
+          b = encoded.charCodeAt(index++) - 63;
+          result |= (b & 0x1f) << shift;
+          shift += 5;
+        } while (b >= 0x20);
+        const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+        lng += dlng;
+
+        points.push([lat / 1e5, lng / 1e5]);
+      }
+
+      return points;
+    }
+  </script>
+</body>
+</html>
